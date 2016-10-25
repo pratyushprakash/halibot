@@ -17,11 +17,18 @@ if "." not in sys.path:
 	sys.path.append(".")
 import logging
 
+class ObjectDict(dict):
+	def __getattr__(self, key):
+		if key == "modules":
+			return dict(filter(lambda x: isinstance(x[1], HalModule), self.items()))
+		elif key == "agents":
+			return dict(filter(lambda x: isinstance(x[1], HalAgent), self.items()))
+		return super.__getattr__(self, key)
+
+
 class Halibot():
 
 	config = {}
-	agents = {}
-	modules = {}
 
 	running = False
 	log = None
@@ -33,6 +40,7 @@ class Halibot():
 		self.use_auth = kwargs.get("use_auth", True)
 
 		self.auth = HalAuth()
+		self.objects = ObjectDict()
 
 	# Start the Hal instance
 	def start(self, block=True):
@@ -48,21 +56,19 @@ class Halibot():
 	def shutdown(self):
 		self.log.info("Shutting down halibot...");
 
-		for m in self.modules.values():
-			m._shutdown()
-		for a in self.agents.values():
-			a._shutdown()
+		for o in self.objects.values():
+			o._shutdown()
 
 		self.log.info("Halibot shutdown. Threads left: " + str(threading.active_count()))
 
 	def add_agent_instance(self, name, inst):
-		self.agents[name] = inst
+		self.objects[name] = inst
 		inst.name = name
 		inst.init()
 		self.log.info("Instantiated agent '" + name + "'")
 
 	def add_module_instance(self, name, inst):
-		self.modules[name] = inst
+		self.objects[name] = inst
 		inst.name = name
 		inst.init()
 		self.log.info("Instantiated module '" + name + "'")
@@ -130,10 +136,7 @@ class Halibot():
 			self.add_module_instance(k, obj(self, conf))
 
 	def get_object(self, name):
-		# TODO priority?
-		if name in self.modules: return self.modules[name]
-		if name in self.agents: return self.agents[name]
-		return None
+		return self.objects.get(name, None)
 
 	def get_package(self, name):
 		for prefix in self.config['package-path']:
